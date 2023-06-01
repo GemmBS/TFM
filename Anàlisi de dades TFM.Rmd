@@ -1,0 +1,480 @@
+---
+title: "TFM"
+author: "Gemma Bargalló Solé"
+date: "2023-04-27"
+output:
+  word_document: default
+  html_document: default
+---
+**1. INTRODUCCIÓ DE DADES** 
+ 
+De moment introduim les dades dels transsectes, tant les de la comptabilització de les espècies com la dels factors climàtics:
+```{r}
+GMEP_POLLINATOR_TRAN_VISIT_2013_16 <- read.csv("~/MASTER/Assignatures/TFM/dades/data/GMEP_POLLINATOR_TRAN_VISIT_2013_16.csv")
+TRAN_VISIT = GMEP_POLLINATOR_TRAN_VISIT_2013_16
+TRAN_VISIT$MONTH <- as.factor(TRAN_VISIT$MONTH)
+TRAN_VISIT$YEAR <- as.factor(TRAN_VISIT$YEAR)
+TRAN_VISIT$SQ_ID <- as.factor(TRAN_VISIT$SQ_ID)
+TRAN_VISIT$WIND_SPEED<- as.factor(TRAN_VISIT$WIND_SPEED)
+TRAN_VISIT$LC<- as.factor(TRAN_VISIT$LC)
+TRAN_VISIT <- na.omit(TRAN_VISIT)
+attach(TRAN_VISIT)
+head(TRAN_VISIT)
+
+GMEP_POLLINATOR_TRAN_COUNT_2013_16 <- read.csv("~/MASTER/Assignatures/TFM/dades/data/GMEP_POLLINATOR_TRAN_COUNT_2013_16.csv")
+TRAN_COUNT = GMEP_POLLINATOR_TRAN_COUNT_2013_16
+TRAN_COUNT$MONTH <- as.factor(TRAN_COUNT$MONTH)
+TRAN_COUNT$YEAR <- as.factor(TRAN_COUNT$YEAR)
+TRAN_COUNT$SQ_ID <- as.factor(TRAN_COUNT$SQ_ID)
+TRAN_COUNT$VISITID <- as.factor(TRAN_COUNT$VISITID)
+TRAN_COUNT$GROUP_CODE <- as.factor(TRAN_COUNT$GROUP_CODE)
+TRAN_COUNT <- na.omit(TRAN_COUNT)
+attach(TRAN_COUNT)
+
+head(TRAN_COUNT)
+
+```
+```{r}
+str(TRAN_COUNT)
+str(TRAN_VISIT)
+```
+Comencem treballant amb el data frame "TRAN_COUNT".
+Triem la variable "COUNT" com a variable de resposta o independent.
+
+**2. ANÀLISI EXPLORATÒRIA**
+
+De les dades dels individus pol·linitzadors comptats (TRAN_COUNT), agafem la variable de resposta i fem un histograma per veure la distribució de les dades. 
+
+```{r}
+hist(COUNT, xlim = c(0, 250))
+```
+Veiem que la freqüència d'individus pol·linitzadors comptats més gran es troba entre els 0 i els 20 individus. Sembla que la distribució estigui esbiaixada cap a la dreta, és a dir, que els valors es concentren al costat esquerra de la distribució.
+
+Calculem el biaix i l'asimetria amb les funcions "skewness" i "kurtois" respectivament:
+```{r}
+library(moments)
+skewness(TRAN_COUNT$COUNT)
+
+kurtosis(TRAN_COUNT$COUNT)
+```
+Veiem que la distribució no és simètrica i efectivament existeix un biaix cap a la dreta. La kurtois és >3 i indica que té més valors en les cues en comparació amb una distribució normal.
+
+Ara volem veure quina és la seva tendència central calculant la mitjana i els quantils de les dades:
+```{r}
+mean(TRAN_COUNT$COUNT)
+quantile(TRAN_COUNT$COUNT,p=c(.05,0.25,0.5,0.75,0.95))
+sd(TRAN_COUNT$COUNT)
+```
+La mitjana total dels individus comptats es troba en el 2,7 i els percentils són molt variables entre ells. La mediana es troba a l'1.
+
+```{r}
+boxplot(TRAN_COUNT$COUNT)
+boxplot.stats(TRAN_COUNT$COUNT)
+```
+Veiem que els outliers respecte la mediana van des del 5 al 220. 
+
+Ara visualitzem la distribució del nombre d'individus pol·linitzadors comptats per cada any amb un diagrama de caixes:
+
+```{r}
+d_caixa<- boxplot(formula = COUNT ~ YEAR, data =  TRAN_COUNT)
+```
+No podem apreciar cap tendència, ja que hi ha molts "outliers" o valors atípics en els números més alts. 
+
+
+Ara calculem la mitjana, la mediana i la desviació típica dels individus comptats per any:
+```{r}
+tapply(TRAN_COUNT$COUNT,TRAN_COUNT$YEAR,mean,data=TRAN_COUNT)
+tapply(TRAN_COUNT$COUNT,TRAN_COUNT$YEAR,median,data=TRAN_COUNT)
+x_13 <- subset(TRAN_COUNT, TRAN_COUNT$YEAR==2013)
+str(x_13)
+x_14 <- subset(TRAN_COUNT, TRAN_COUNT$YEAR==2014)
+str(x_14)
+x_15 <- subset(TRAN_COUNT, TRAN_COUNT$YEAR==2015)
+str(x_15)
+x_16 <- subset(TRAN_COUNT, TRAN_COUNT$YEAR==2016)
+str(x_16)
+sd(x_13$COUNT)
+sd(x_14$COUNT)
+sd(x_15$COUNT)
+sd(x_16$COUNT)
+```
+Veiem que l'any 2014 és on es van comptabilitzar més individus pol·linitzadors de mitjana, tot i així les desviacions estàndars són molt elevades, ja que els valors anuals es troben molt dispersos respecte a les mitjanes anuals.
+
+```{r}
+table(TRAN_COUNT$YEAR) 
+```
+Veiem que les observacions per cada any no són les mateixes. 
+
+Seleccionem només les variables del nostre interès i borrem les altres:
+
+```{r}
+borrar <- c("SECTION","DAY", "GROUP_CODE")
+TRAN_COUNT1 <- TRAN_COUNT[ , !(names(TRAN_COUNT) %in% borrar)]
+head(TRAN_COUNT1)
+```
+Sumem el total d'individus comptabilitzats (columna COUNT) per cada any sense separar-los per mesos.
+```{r}
+TRAN_COUNT2<- aggregate(COUNT ~ YEAR, TRAN_COUNT1[TRAN_COUNT1$MONTH %in% c(7,8),], sum)
+
+TRAN_COUNT2
+
+
+```
+Veiem que l'any 2013 és on menys individus pol·linitzadors s'han comptat, seguit va el 2016, 2015 i 2014.
+
+Calculem la mitjana total d'individus comptabilitzats en els 4 anys:
+
+```{r}
+MitjanaValor <- mean(TRAN_COUNT2$COUNT)
+MitjanaValor
+```
+Fem un gràfic de barres per veure la tendència total dels individus pol·linitzadors comptabilitzats per any:
+```{r}
+barplot(height=TRAN_COUNT2$COUNT, name=TRAN_COUNT2$YEAR, main="Nombre d'individus pol·linitzadors per any",                
+        xlab="Any",                          
+        ylab="Nombre d'individus",                  
+        legend = rownames(TRAN_COUNT2$YEAR),          
+        ylim = c(0, 70000),                     
+        col=c("Indianred1","lightslateblue","mediumseagreen","moccasin"), 
+        beside=TRUE)       
+
+
+```
+
+Sumem el total d'individus pol·linitzadors comptats per mes (juliol i agost) sense tenir en compte els anys:
+```{r}
+TRAN_COUNT3<- aggregate(COUNT ~ MONTH, TRAN_COUNT1[TRAN_COUNT1$YEAR %in% c(2013,2014,2015,2016),], sum)
+
+TRAN_COUNT3
+
+z_7 <- subset(TRAN_COUNT, TRAN_COUNT$MONTH==7)
+z_8 <- subset(TRAN_COUNT, TRAN_COUNT$MONTH==8)
+mean(z_7$COUNT)
+mean(z_8$COUNT)
+sd(z_7$COUNT)
+sd(z_8$COUNT)
+
+```
+Veiem que en el mes d'agost s'han comptabilitzat més individus pol·linitzadors que en el mes de juliol. 
+
+**3. Model de regressió multivariant**
+
+Introduïm la variable "COUNT" del dataframe TRAN_COUNT al dataframe TRAN_VISIT:
+
+```{r}
+TRAN_VISIT2<- MEP_POLLINATOR_TRAN_VISIT_2013_16...copia <- read.csv("~/MASTER/Assignatures/TFM/dades/data/GMEP_POLLINATOR_TRAN_VISIT_2013_16 - copia.csv")
+TRAN_VISIT2<- na.omit(TRAN_VISIT2)
+TRAN_VISIT2$MONTH <- as.factor(TRAN_VISIT2$MONTH)
+TRAN_VISIT2$YEAR <- as.factor(TRAN_VISIT2$YEAR)
+TRAN_VISIT2$SQ_ID <- as.factor(TRAN_VISIT2$SQ_ID)
+attach(TRAN_VISIT2)
+head(TRAN_VISIT2)
+
+```
+
+Per a poder fer l'anàlisi multivariant, seleccionem les variables d'interès, que són les numèriques contínues:
+```{r}
+borrar2 <- c("VISITID","DAY", "RECORDER","START_TIME","END_TIME","DATE","MONTH","SQ_ID","YEAR","LC","WIND_SPEED")
+TRAN_VISIT3 <- TRAN_VISIT2[ , !(names(TRAN_VISIT2) %in% borrar2)]
+head(TRAN_VISIT3)
+```
+
+Fem l'anàlisi de correlacions:
+```{r}
+library(corrplot)
+cor(TRAN_VISIT3)
+corrplot(cor(TRAN_VISIT3),
+         method = "circle",       
+         order = "hclust",        
+         hclust.method = "ward.D", 
+         addrect = 2,             
+         rect.col = 3,             
+         rect.lwd = 3)  
+
+```
+Les variables explicatives no tenen cap correlació notable amb la variable de resposta.
+
+Veiem representades les distribucions de cada variable i la normalitat multivariant:
+
+```{r}
+library(MVN)
+result = mvn(data = TRAN_VISIT3, mvnTest = "hz",
+             univariateTest = "AD", univariatePlot = "histogram",
+             multivariatePlot = "qq", multivariateOutlierMethod = "adj",
+             showOutliers = TRUE, showNewData = TRUE)
+
+```
+
+```{r}
+result$univariateNormality
+```
+Hem vist amb el gràfic "adjusted Chi-squared Q-Q Plot" que existeixen outliers i que cap variable segueix una distribució normal.
+
+```{r}
+result$multivariateNormality
+```
+Com era d'esperar, tampoc existeix normalitat multivariant.
+Estudiem els outliers:
+
+```{r}
+result$multivariateOutliers
+```
+
+
+```{r}
+TRAN_VISIT2$LC<- as.factor(TRAN_VISIT2$LC)
+results3<-lm(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2)
+summary(results3)
+```
+```{r}
+library(car)
+qqnorm(residuals(results3))
+qqline(residuals(results3))
+shapiro.test(results3$residuals)
+```
+Veiem que els residus no segueixen una distribució normal.
+
+Fem la prova de White per veure si existeix heteroscedasticitat:
+```{r}
+library(lmtest)
+bptest(results3)
+```
+Com que 0.002056 < 0.05 rebutgem la hipòtesis nul·la i diem que els residus dels model són heteroscedàstics. 
+
+Ara apliquem la prova d'autocorrelació:
+```{r}
+dwtest(results3,alternative = "two.sided",iterations = 1000)
+```
+Hi pot haver autocorrelació.
+
+Per corregir aquesta manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
+
+```{r}
+library(MASS)
+BC<- boxcox(results3)
+
+```
+Les línies verticals del gràfic indiquen la regió on es pot trobar la lambda: entre 0 i 0.25 aproximadament.
+Calculem lambda:
+```{r}
+lambda<-BC$x[which.max(BC$y)]
+lambda
+
+```
+El valor de lambda és 0.182.
+
+A continuació canviem la nostra variable de resposta COUNT elevant-la a la lambda que hem trobat i tornem a construir el model amb la nova variable de resposta.
+
+```{r}
+TRAN_VISIT2$COUNTt<-with(TRAN_VISIT2, COUNT^lambda)
+results3T<-lm(COUNTt~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2)
+
+summary(results3T)
+
+```
+Tornem a aplicar el test de Shapiro-Wilk per comprovar la millora en la normalitat dels residus:
+
+```{r}
+shapiro.test(results3T$residuals)
+```
+Veiem que amb aquest canvi, els residus del model segueixen una distribució normal. 
+Comprovem altra cop l'heteroscedasticitat:
+
+```{r}
+library(lmtest)
+bptest(results3T)
+
+plot(results3T$residuals, type="l")
+abline (0,0)
+```
+L'heteroscedasticitat és més elevada.
+
+Tornem a mirar l'autocorrelació
+```{r}
+dwtest(results3T,alternative = "two.sided",iterations = 1000)
+```
+Encara existeix autocorrelació. 
+
+
+```{r}
+library(car)
+qqPlot(results3T$residuals, col.lines = "green")
+
+```
+Veiem que encara existeixen alguns valors atípics. 
+
+A partir de les funcions influence.measures() i influencePlot() trobem quins són els valors atípics i influents en el model:
+```{r}
+library(car)
+summary(influence.measures(model = results3T))
+
+```
+
+
+```{r}
+influencePlot(model = results3T)
+```
+```{r}
+cutoff <- 4 / (26-2-2)  
+plot(results3T, which=4, cook.levels=cutoff, las=1)
+abline(h=cutoff, lty="dashed", col="dodgerblue2")
+
+```
+Hi ha uns quants valors atípics.
+
+
+Correcció autocorrelació:
+```{r}
+library(orcutt)
+model1<- cochrane.orcutt(results3T)
+model1
+summary(model1)
+```
+```{r}
+dwtest(model1)
+shapiro.test(model1$residuals)
+```
+Ja no existeix autocorrelació
+
+
+```{r}
+bptest(model1)
+```
+Encara tenim heteroscedasticitat.
+
+Com que amb les correccions de les suposicions aplicades al model inicial no ens han ajudat a cumplir tots els requisits del model de regressió lineal, apliquem el mètode Stepwise amb el procediment Forward per a que seleccioni només les variables estadísticament significatives.
+
+**Mètode Stepwise**
+
+Pas 1: Generar el model sense variables independents 
+
+Creem el nostre model de regressió sense variables independents i l’anomenem model buit (empty model). Recordem que la nostra variable de resposta o dependent era COUNT:
+
+```{r}
+empty.model<-lm(COUNTt ~ 1, data=TRAN_VISIT2) 
+
+summary(empty.model)
+
+```
+Pas 2: Generar el model amb el procediment Forward
+
+Aquest pas consisteix en generar un model que compari la regressió completa amb la buida de variables independents fins que seleccioni només aquelles estadísticament significatives.
+
+```{r}
+regforw<-step(empty.model, scope = list(lower=empty.model, upper=results3T),direction = "forward")
+summary(regforw)
+```
+
+```{r}
+model.incomplet<- lm(COUNTt ~ LC, data = TRAN_VISIT2)
+summary(model.incomplet)
+```
+Seguim veient que el R quadrat ajustat i múltiple són molt baixos i no milloren el model. 
+
+Com hem vist, quan hem aplicat el model lineal (model1), la variable explicativa "LC" tenia un efecte significatiu sobre la variable de resposta "COUNTt".
+Apliquem el test ANOVA per comparar la diferència de mitjanes: 
+
+```{r}
+TRAN_VISIT2$LC<- as.factor(TRAN_VISIT2$LC)
+head(TRAN_VISIT2$LC)
+library(ggplot2)
+ggplot(data = TRAN_VISIT2, aes(x = LC, y = COUNTt, color = LC)) +
+    geom_boxplot() +
+    theme_bw()
+```
+
+```{r}
+m2<- lm(COUNTt~LC, data = TRAN_VISIT2)
+summary(m2)
+
+```
+```{r}
+model<- aov(COUNTt ~ LC, data = TRAN_VISIT2)
+summary(model)
+```
+Segons els test ANOVA la variable LC és significativa.
+
+Estimació de les mitjanes per grups LC:
+
+```{r}
+attach(TRAN_VISIT2)
+tapply(COUNTt,LC,mean,data=TRAN_VISIT2)
+
+```
+```{r}
+TukeyHSD(model)
+```
+```{r}
+pairwise.t.test(TRAN_VISIT2$COUNTt,TRAN_VISIT2$LC, p.adj= 'bonferroni')
+```
+A continuació estudiem la tendència de la pol·linització creant un model amb només la variable YEAR com a predictora per a veure si existeixen diferències significatives entre el nombre d'nidividus comptabilitzats per any: 
+
+```{r}
+m3<- lm(COUNTt~YEAR, data = TRAN_VISIT2)
+summary(m3)
+
+```
+```{r}
+model2<- aov(COUNTt ~ YEAR, data = TRAN_VISIT2)
+summary(model2)
+```
+```{r}
+model.tables(model,"means")
+```
+
+```{r}
+TRAN_COUNT6<- aggregate(COUNT ~ LC, TRAN_VISIT2[TRAN_VISIT2$YEAR %in% c(2013,2014,2015,2016),], sum)
+
+TRAN_COUNT6
+```
+
+Test de normalitat dels residus a partir dels nivells de la variable LC: 
+```{r}
+require(nortest)
+by(data = TRAN_VISIT2,INDICES = TRAN_VISIT2$LC,FUN = function(x){ lillie.test(x$COUNTt)})
+```
+Test d'homoscedasticitat:
+```{r}
+fligner.test(COUNTt ~ LC,TRAN_VISIT2)
+require(car)
+leveneTest(COUNTt ~ LC,TRAN_VISIT2,center = "median")
+```
+Falta d'homoscedasticitat.
+```{r}
+m2<- lm(COUNTt~LC, data = TRAN_VISIT2)
+summary(m2)
+
+```
+
+
+Fem l'anàlisi de correlacions:
+
+```{r}
+library(corrplot)
+cor(TRAN_VISIT3)
+corrplot(cor(TRAN_VISIT3),
+         method = "circle",       
+         order = "hclust",        
+         hclust.method = "ward.D", 
+         addrect = 2,             
+         rect.col = 3,             
+         rect.lwd = 3)  
+
+```
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
