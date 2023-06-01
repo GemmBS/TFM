@@ -6,6 +6,8 @@ output:
   word_document: default
   html_document: default
 ---
+**Part 1: Tendència de la pol·linització**
+
 **1. INTRODUCCIÓ DE DADES** 
  
 De moment introduim les dades dels transsectes, tant les de la comptabilització de les espècies com la dels factors climàtics:
@@ -462,6 +464,174 @@ corrplot(cor(TRAN_VISIT3),
 
 ```
  
+---------------------------------------------------------------------
+
+**PART 2: Classificació d'insectes pol·linitzadors**
+
+**INTRODUCCIÓ DE DADES**
+
+```{r}
+GMEP_POLLINATOR_OBSV_COUNT_2013_16 <- read.csv("~/MASTER/Assignatures/TFM/dades/data/GMEP_POLLINATOR_OBSV_COUNT_2013_16.csv")
+OBSV_COUNT = GMEP_POLLINATOR_OBSV_COUNT_2013_16
+OBSV_COUNT$SQ_ID <- as.factor(OBSV_COUNT$SQ_ID)
+OBSV_COUNT$MONTH <- as.factor(OBSV_COUNT$MONTH)
+OBSV_COUNT$YEAR <- as.factor(OBSV_COUNT$YEAR)
+OBSV_COUNT$FLOWER_GROUP_CODE<- as.factor(OBSV_COUNT$FLOWER_GROUP_CODE)
+OBSV_COUNT$INSECT_GROUP_CODE <- as.factor(OBSV_COUNT$INSECT_GROUP_CODE)
+OBSV_COUNT <- na.omit(OBSV_COUNT)
+attach(OBSV_COUNT)
+head(OBSV_COUNT)
+```
+```{r}
+hist(OBSV_COUNT$NUM_VISITS, xlim = c(0, 250))
+```
+
+```{r}
+mean(OBSV_COUNT$NUM_VISITS)
+quantile(OBSV_COUNT$NUM_VISITS,p=c(.05,0.25,0.5,0.75,0.95))
+```
+
+```{r}
+boxplot(OBSV_COUNT$NUM_VISITS)
+boxplot.stats(OBSV_COUNT$NUM_VISITS)
+```
+Veiem que els outliers respecte la mediana van des del 5 al 282.
+
+```{r}
+dcaixa<- boxplot(formula = NUM_VISITS ~ YEAR, data =  OBSV_COUNT)
+```
+
+```{r}
+tapply(OBSV_COUNT$NUM_VISITS,OBSV_COUNT$YEAR,mean,data=OBSV_COUNT)
+tapply(OBSV_COUNT$NUM_VISITS,OBSV_COUNT$YEAR,median,data=TRAN_COUNT)
+x13 <- subset(OBSV_COUNT, OBSV_COUNT$YEAR==2013)
+x14 <- subset(OBSV_COUNT, OBSV_COUNT$YEAR==2014)
+x15 <- subset(OBSV_COUNT, OBSV_COUNT$YEAR==2015)
+x16 <- subset(OBSV_COUNT, OBSV_COUNT$YEAR==2016)
+sd(x13$NUM_VISITS)
+sd(x14$NUM_VISITS)
+sd(x15$NUM_VISITS)
+sd(x16$NUM_VISITS)
+```
+```{r}
+OBSV_COUNT2<- aggregate(NUM_VISITS ~ YEAR, OBSV_COUNT[OBSV_COUNT$MONTH %in% c(7,8),], sum)
+
+OBSV_COUNT2
+```
+
+```{r}
+barplot(height=OBSV_COUNT2$NUM_VISITS, name=OBSV_COUNT2$YEAR, main="Nombre d'observacions de pol·linitzadors per any",                
+        xlab="Any",                          
+        ylab="Nombre d'individus",                  
+        legend = rownames(OBSV_COUNT2$YEAR),          
+        ylim = c(0, 8000),                     
+        col=c("Indianred1","lightslateblue","mediumseagreen","moccasin"), 
+        beside=TRUE) 
+```
+
+```{r}
+OBSV_COUNT3<- aggregate(NUM_VISITS ~ MONTH, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2013,2014,2015,2016),], sum)
+
+OBSV_COUNT3
+```
+
+
+```{r}
+INSECT_GROUP_CODE<- as.factor(INSECT_GROUP_CODE)
+OBSV_COUNT4<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2013,2014,2015,2016),], sum)
+
+OBSV_COUNT4
+
+```
+
+ANÀLISIS DE CONGLOMERATS
+
+```{r}
+library(dplyr)
+standar_data<- as.data.frame(mutate_if(OBSV_COUNT, is.numeric, scale))
+
+standar_data1<-standar_data[,sapply(standar_data,is.numeric)]
+str(standar_data1) 
+ 
+
+```
+```{r}
+euc.dist<-dist(standar_data1,method = "euclidean")
+
+hcl1<-hclust(euc.dist,method = "ward.D2")
+
+plot(hcl1, labels = INSECT_GROUP_CODE, hang = 0.1, check = TRUE, axes = TRUE, frame.plot = FALSE, ann = TRUE, sub = NULL, xlab = NULL, ylab = "Height")
+cl<- cutree(tree = hcl1, k = 2)
+rect.hclust(tree = hcl1, k = 2, which = 1:2, border = 1:2, cluster = cl)
+
+
+```
+
+Es veuen dos grans grups que després es divideixen en subgrups més petits.
+
+```{r}
+library(factoextra)
+fviz_nbclust(standar_data1, kmeans,iter.max = 100,
+             method = "silhouette") +
+  labs(title = "Mètode Silhouette - Nombre òptim de conglomerats")
+
+```
+
+El nombre òptim de conglomerats és 4.
+
+```{r}
+library(cluster)
+kmed <- pam (standar_data1, k = 4)
+kmed
+
+```
+```{r}
+library("cluster")
+fviz_cluster(kmed, data = standar_data1)
+
+```
+**Nombre d'espècie pol·linitzadores per any**
+
+Volem saber si el nombre d'espècies pol·linitzadores ha disminuït en els anys d'estudi.
+Creem un data frame per cada any:
+
+```{r}
+OBSV_COUNT_13<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2013),], sum)
+
+OBSV_COUNT_14<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2014),], sum)
+
+OBSV_COUNT_15<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2015),], sum)
+
+OBSV_COUNT_16<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2016),], sum)
+
+OBSV_COUNT_13
+OBSV_COUNT_14
+OBSV_COUNT_15
+OBSV_COUNT_16
+
+str(OBSV_COUNT_13)
+str(OBSV_COUNT_14)
+str(OBSV_COUNT_15)
+str(OBSV_COUNT_16)
+```
+Si ens fixem amb el nombre d'observacions, aquestes van disminuint amb els anys, per tant, vol dir que el nombre d'espècies disminueix any rere any.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
