@@ -249,7 +249,67 @@ dwtest(results3,alternative = "two.sided",iterations = 1000)
 ```
 Hi pot haver autocorrelació.
 
-Per corregir aquesta manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
+
+Per corregir l'ajust del model estudiem els outliers:
+
+Definim la funció dels outliers:
+```{r}
+outliers <- function(x) {
+
+  Q1 <- quantile(x, probs=.25)
+  Q3 <- quantile(x, probs=.75)
+  iqr = Q3-Q1
+
+ upper_limit = Q3 + (iqr*1.5)
+ lower_limit = Q1 - (iqr*1.5)
+
+ x > upper_limit | x < lower_limit
+}
+
+remove_outliers <- function(TRAN_VISIT2, cols = names(TRAN_VISIT2)) {
+  for (col in cols) {
+    TRAN_VISIT2 <- TRAN_VISIT2[!outliers(TRAN_VISIT2[[col]]),]
+  }
+  TRAN_VISIT2
+}
+```
+
+Apliquem la funció al nostre data frame
+```{r}
+TRAN_VISIT2_1<- remove_outliers(TRAN_VISIT2, c('COUNT', 'SUNSHINE','TEMPERATURE','WIND_SPEED'))
+
+```
+
+S'han eliminat 65 outliers del dataframe.
+
+```{r}
+TRAN_VISIT2_1$LC<- as.factor(TRAN_VISIT2_1$LC)
+results3o<-lm(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2_1)
+summary(results3o)
+````
+```{r}
+library(stargazer)
+stargazer(results3, results3o, type = 'text', header=FALSE)
+```
+
+L'ajust del model segueix sent baix...
+
+Provem de dur a terme la regressió robusta:
+
+```{r}
+library(robustbase)
+results3_1<-lmrob(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2, na.action=na.exclude)
+summary(results3_1)
+```
+
+Veiem que l'error estàndard ha disminuit de 305,2 a 163,9. 
+
+```{r}
+library(stargazer)
+stargazer(results3, results3_1, type = 'text', header=FALSE)
+```
+
+Per corregir la manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
 
 ```{r}
 library(MASS)
@@ -435,19 +495,15 @@ Test de normalitat dels residus a partir dels nivells de la variable LC:
 require(nortest)
 by(data = TRAN_VISIT2,INDICES = TRAN_VISIT2$LC,FUN = function(x){ lillie.test(x$COUNTt)})
 ```
-Test d'homoscedasticitat:
-```{r}
-fligner.test(COUNTt ~ LC,TRAN_VISIT2)
-require(car)
-leveneTest(COUNTt ~ LC,TRAN_VISIT2,center = "median")
-```
-Falta d'homoscedasticitat.
 ```{r}
 m2<- lm(COUNTt~LC, data = TRAN_VISIT2)
 summary(m2)
 
 ```
-
+```{r}
+model<- aov(COUNTt ~ LC, data = TRAN_VISIT2)
+summary(model)
+```
 
 Fem l'anàlisi de correlacions:
 
