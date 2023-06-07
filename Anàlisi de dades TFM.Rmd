@@ -309,7 +309,10 @@ library(stargazer)
 stargazer(results3, results3_1, type = 'text', header=FALSE)
 ```
 
-Per corregir la manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
+Veiem que el model millora però ho fa molt poc, per tant, decidim quedar-nos amb el model inicial.
+
+Per corregir aquesta manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
+
 
 ```{r}
 library(MASS)
@@ -384,126 +387,86 @@ abline(h=cutoff, lty="dashed", col="dodgerblue2")
 ```
 Hi ha uns quants valors atípics.
 
+Eliminem els valors que podrien resultar problemàtics:
 
-Correcció autocorrelació:
+```{r}
+TRAN_VISIT_no<- TRAN_VISIT2[-c(18,58,140,160,228,303,328,358,375,397,476,527,541,560,575,576),]
+```
+Tornem a aplicar la regressió lineal
+
+```{r}
+model_no<- lm(formula = COUNTt ~ MONTH + YEAR + SUNSHINE + TEMPERATURE +      WIND_SPEED + LC, data = TRAN_VISIT_no)
+
+summary(model_no)
+```
+```{r}
+shapiro.test(model_no$residuals)
+library(lmtest)
+bptest(model_no)
+dwtest(model_no,alternative = "two.sided",iterations = 1000)
+```
+Encara hi ha autocorrelació.
+
+Correcció autocorrelació amb Cochrane orcutt:
 ```{r}
 library(orcutt)
-model1<- cochrane.orcutt(results3T)
-model1
-summary(model1)
-```
-```{r}
-dwtest(model1)
-shapiro.test(model1$residuals)
-```
-Ja no existeix autocorrelació
-
-
-```{r}
-bptest(model1)
-```
-Encara tenim heteroscedasticitat.
-
-Com que amb les correccions de les suposicions aplicades al model inicial no ens han ajudat a cumplir tots els requisits del model de regressió lineal, apliquem el mètode Stepwise amb el procediment Forward per a que seleccioni només les variables estadísticament significatives.
-
-**Mètode Stepwise**
-
-Pas 1: Generar el model sense variables independents 
-
-Creem el nostre model de regressió sense variables independents i l’anomenem model buit (empty model). Recordem que la nostra variable de resposta o dependent era COUNT:
-
-```{r}
-empty.model<-lm(COUNTt ~ 1, data=TRAN_VISIT2) 
-
-summary(empty.model)
-
-```
-Pas 2: Generar el model amb el procediment Forward
-
-Aquest pas consisteix en generar un model que compari la regressió completa amb la buida de variables independents fins que seleccioni només aquelles estadísticament significatives.
-
-```{r}
-regforw<-step(empty.model, scope = list(lower=empty.model, upper=results3T),direction = "forward")
-summary(regforw)
+model3<- cochrane.orcutt(model_no)
+model3
+summary(model3)
 ```
 
 ```{r}
-model.incomplet<- lm(COUNTt ~ LC, data = TRAN_VISIT2)
-summary(model.incomplet)
+dwtest(model3)
+shapiro.test(model3$residuals)
+bptest(model3)
 ```
-Seguim veient que el R quadrat ajustat i múltiple són molt baixos i no milloren el model. 
 
-Com hem vist, quan hem aplicat el model lineal (model1), la variable explicativa "LC" tenia un efecte significatiu sobre la variable de resposta "COUNTt".
+Com hem vist, quan hem aplicat el model lineal (model3), la variable explicativa "LC" tenia un efecte significatiu sobre la variable de resposta "COUNTt".
 Apliquem el test ANOVA per comparar la diferència de mitjanes: 
 
 ```{r}
-TRAN_VISIT2$LC<- as.factor(TRAN_VISIT2$LC)
-head(TRAN_VISIT2$LC)
+TRAN_VISIT_no$LC<- as.factor(TRAN_VISIT_no$LC)
+head(TRAN_VISIT_no$LC)
 library(ggplot2)
-ggplot(data = TRAN_VISIT2, aes(x = LC, y = COUNTt, color = LC)) +
+ggplot(data = TRAN_VISIT_no, aes(x = LC, y = COUNTt, color = LC)) +
     geom_boxplot() +
     theme_bw()
 ```
 
+Apliquem el model lineal  
 ```{r}
-m2<- lm(COUNTt~LC, data = TRAN_VISIT2)
+m2<- lm(COUNTt~LC, data = TRAN_VISIT_no)
 summary(m2)
 
 ```
+Test de normalitat dels residus a partir dels nivells de la variable LC: 
 ```{r}
-model<- aov(COUNTt ~ LC, data = TRAN_VISIT2)
+require(nortest)
+by(data = TRAN_VISIT_no,INDICES = TRAN_VISIT_no$LC,FUN = function(x){ lillie.test(x$COUNTt)})
+```
+
+```{r}
+model<- aov(COUNTt ~ LC, data = TRAN_VISIT_no)
 summary(model)
 ```
-Segons els test ANOVA la variable LC és significativa.
 
 Estimació de les mitjanes per grups LC:
 
 ```{r}
-attach(TRAN_VISIT2)
-tapply(COUNTt,LC,mean,data=TRAN_VISIT2)
+attach(TRAN_VISIT_no)
+tapply(COUNTt,LC,mean,data=TRAN_VISIT_no)
 
 ```
 ```{r}
-TukeyHSD(model)
-```
-```{r}
-pairwise.t.test(TRAN_VISIT2$COUNTt,TRAN_VISIT2$LC, p.adj= 'bonferroni')
-```
-A continuació estudiem la tendència de la pol·linització creant un model amb només la variable YEAR com a predictora per a veure si existeixen diferències significatives entre el nombre d'nidividus comptabilitzats per any: 
-
-```{r}
-m3<- lm(COUNTt~YEAR, data = TRAN_VISIT2)
-summary(m3)
-
-```
-```{r}
-model2<- aov(COUNTt ~ YEAR, data = TRAN_VISIT2)
-summary(model2)
-```
-```{r}
-model.tables(model,"means")
+pairwise.t.test(TRAN_VISIT_no$COUNTt,TRAN_VISIT_no$LC, p.adj= 'bonferroni')
 ```
 
 ```{r}
-TRAN_COUNT6<- aggregate(COUNT ~ LC, TRAN_VISIT2[TRAN_VISIT2$YEAR %in% c(2013,2014,2015,2016),], sum)
+TRAN_COUNT6<- aggregate(COUNT ~ LC, TRAN_VISIT_no[TRAN_VISIT_no$YEAR %in% c(2013,2014,2015,2016),], sum)
 
 TRAN_COUNT6
 ```
 
-Test de normalitat dels residus a partir dels nivells de la variable LC: 
-```{r}
-require(nortest)
-by(data = TRAN_VISIT2,INDICES = TRAN_VISIT2$LC,FUN = function(x){ lillie.test(x$COUNTt)})
-```
-```{r}
-m2<- lm(COUNTt~LC, data = TRAN_VISIT2)
-summary(m2)
-
-```
-```{r}
-model<- aov(COUNTt ~ LC, data = TRAN_VISIT2)
-summary(model)
-```
 
 Fem l'anàlisi de correlacions:
 
