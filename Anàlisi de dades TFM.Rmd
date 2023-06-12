@@ -169,7 +169,11 @@ TRAN_VISIT2<- na.omit(TRAN_VISIT2)
 TRAN_VISIT2$MONTH <- as.factor(TRAN_VISIT2$MONTH)
 TRAN_VISIT2$YEAR <- as.factor(TRAN_VISIT2$YEAR)
 TRAN_VISIT2$SQ_ID <- as.factor(TRAN_VISIT2$SQ_ID)
+TRAN_VISIT2$RECORDER<-as.factor(TRAN_VISIT2$RECORDER)
+TRAN_VISIT2$LC<- as.factor(TRAN_VISIT2$LC)
+TRAN_VISIT2$WIND_SPEED<- as.factor(TRAN_VISIT2$WIND_SPEED)
 attach(TRAN_VISIT2)
+TRAN_VISIT2<-na.omit(TRAN_VISIT2)
 head(TRAN_VISIT2)
 
 ```
@@ -215,7 +219,7 @@ Hem vist amb el gràfic "adjusted Chi-squared Q-Q Plot" que existeixen outliers 
 ```{r}
 result$multivariateNormality
 ```
-Com era d'esperar, tampoc existeix normalitat multivariant.
+Tampoc existeix normalitat multivariant.
 Estudiem els outliers:
 
 ```{r}
@@ -224,8 +228,7 @@ result$multivariateOutliers
 
 
 ```{r}
-TRAN_VISIT2$LC<- as.factor(TRAN_VISIT2$LC)
-results3<-lm(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2)
+results3<-lm(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC+NORTHING_10km+EASTING_10km+0,data = TRAN_VISIT2)
 summary(results3)
 ```
 ```{r}
@@ -233,6 +236,7 @@ library(car)
 qqnorm(residuals(results3))
 qqline(residuals(results3))
 shapiro.test(results3$residuals)
+plot(results3)
 ```
 Veiem que els residus no segueixen una distribució normal.
 
@@ -241,7 +245,7 @@ Fem la prova de White per veure si existeix heteroscedasticitat:
 library(lmtest)
 bptest(results3)
 ```
-Com que 0.002056 < 0.05 rebutgem la hipòtesis nul·la i diem que els residus dels model són heteroscedàstics. 
+Com que 0.02988 < 0.05 rebutgem la hipòtesis nul·la i diem que els residus dels model són heteroscedàstics. 
 
 Ara apliquem la prova d'autocorrelació:
 ```{r}
@@ -249,70 +253,7 @@ dwtest(results3,alternative = "two.sided",iterations = 1000)
 ```
 Hi pot haver autocorrelació.
 
-
-Per corregir l'ajust del model estudiem els outliers:
-
-Definim la funció dels outliers:
-```{r}
-outliers <- function(x) {
-
-  Q1 <- quantile(x, probs=.25)
-  Q3 <- quantile(x, probs=.75)
-  iqr = Q3-Q1
-
- upper_limit = Q3 + (iqr*1.5)
- lower_limit = Q1 - (iqr*1.5)
-
- x > upper_limit | x < lower_limit
-}
-
-remove_outliers <- function(TRAN_VISIT2, cols = names(TRAN_VISIT2)) {
-  for (col in cols) {
-    TRAN_VISIT2 <- TRAN_VISIT2[!outliers(TRAN_VISIT2[[col]]),]
-  }
-  TRAN_VISIT2
-}
-```
-
-Apliquem la funció al nostre data frame
-```{r}
-TRAN_VISIT2_1<- remove_outliers(TRAN_VISIT2, c('COUNT', 'SUNSHINE','TEMPERATURE','WIND_SPEED'))
-
-```
-
-S'han eliminat 65 outliers del dataframe.
-
-```{r}
-TRAN_VISIT2_1$LC<- as.factor(TRAN_VISIT2_1$LC)
-results3o<-lm(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2_1)
-summary(results3o)
-````
-```{r}
-library(stargazer)
-stargazer(results3, results3o, type = 'text', header=FALSE)
-```
-
-L'ajust del model segueix sent baix...
-
-Provem de dur a terme la regressió robusta:
-
-```{r}
-library(robustbase)
-results3_1<-lmrob(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2, na.action=na.exclude)
-summary(results3_1)
-```
-
-Veiem que l'error estàndard ha disminuit de 305,2 a 163,9. 
-
-```{r}
-library(stargazer)
-stargazer(results3, results3_1, type = 'text', header=FALSE)
-```
-
-Veiem que el model millora però ho fa molt poc, per tant, decidim quedar-nos amb el model inicial.
-
 Per corregir aquesta manca de normalitat utilitzarem el model Box-Cox transformant la nostra variable de resposta. La transformació es farà de manera que Y^lambda (la variable de resposta s’elevarà a la lambda), per això ens cal conèixer quin és el valor de lambda que ens asseguri que el residus tinguin una distribució normal.
-
 
 ```{r}
 library(MASS)
@@ -332,10 +273,9 @@ A continuació canviem la nostra variable de resposta COUNT elevant-la a la lamb
 
 ```{r}
 TRAN_VISIT2$COUNTt<-with(TRAN_VISIT2, COUNT^lambda)
-results3T<-lm(COUNTt~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC,data = TRAN_VISIT2)
+results3T<-lm(COUNTt~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC+EASTING_10km+NORTHING_10km+0,data = TRAN_VISIT2)
 
 summary(results3T)
-
 ```
 Tornem a aplicar el test de Shapiro-Wilk per comprovar la millora en la normalitat dels residus:
 
@@ -379,23 +319,18 @@ summary(influence.measures(model = results3T))
 ```{r}
 influencePlot(model = results3T)
 ```
-```{r}
-cutoff <- 4 / (26-2-2)  
-plot(results3T, which=4, cook.levels=cutoff, las=1)
-abline(h=cutoff, lty="dashed", col="dodgerblue2")
 
-```
 Hi ha uns quants valors atípics.
 
 Eliminem els valors que podrien resultar problemàtics:
 
 ```{r}
-TRAN_VISIT_no<- TRAN_VISIT2[-c(18,58,140,160,228,303,328,358,375,397,476,527,541,560,575,576),]
+TRAN_VISIT_no<- TRAN_VISIT2[-c(18,39,58,92,97,131,160,164,197,213,228,235,303,325,375,381,397,403,406,448,466,472,476,488,527,541,544,565,575,576),]
 ```
 Tornem a aplicar la regressió lineal
 
 ```{r}
-model_no<- lm(formula = COUNTt ~ MONTH + YEAR + SUNSHINE + TEMPERATURE +      WIND_SPEED + LC, data = TRAN_VISIT_no)
+model_no<- lm(formula = COUNTt ~ MONTH + YEAR + SUNSHINE + TEMPERATURE +WIND_SPEED + LC+NORTHING_10km+EASTING_10km+0, data = TRAN_VISIT_no)
 
 summary(model_no)
 ```
@@ -405,85 +340,172 @@ library(lmtest)
 bptest(model_no)
 dwtest(model_no,alternative = "two.sided",iterations = 1000)
 ```
-Encara hi ha autocorrelació.
+Encara hi ha autocorrelació i heteroscedasticitat.
 
-Correcció autocorrelació amb Cochrane orcutt:
+MÈTODE STEPWISE
+
+```{r}
+regbuida<-lm(formula = COUNT~1+0, TRAN_VISIT2) 
+summary(regbuida)
+```
+```{r}
+regcompleta<-lm(formula = COUNT~MONTH + YEAR + SUNSHINE + TEMPERATURE + WIND_SPEED + LC + NORTHING_10km + EASTING_10km + DAY + RECORDER+0,TRAN_VISIT2)
+summary(regcompleta) 
+```
+
+```{r}
+regforw<-step(regbuida, scope = list(lower=regbuida, upper=regcompleta),direction = "forward") 
+summary(regforw)
+```
+
+```{r}
+def<- lm(COUNT ~ RECORDER + LC + YEAR + MONTH - 1, data = TRAN_VISIT2)
+summary(def)
+```
+```{r}
+shapiro.test(def$residuals)
+bptest(def)
+dwtest(def)
+```
+Corregim la normalitat amb Box-Cox:
+```{r}
+library(MASS)
+BC2<- boxcox(def)
+```
+```{r}
+lambda2<-BC2$x[which.max(BC2$y)]
+lambda2
+```
+Tornem a aplicar la regressió lineal
+
+```{r}
+TRAN_VISIT2$COUNTtt<-with(TRAN_VISIT2, COUNT^lambda2)
+def3<-lm(COUNTtt ~ RECORDER + LC + YEAR + MONTH - 1, data = TRAN_VISIT2)
+
+summary(def3)
+```
+```{r}
+shapiro.test(def3$residuals)
+```
+```{r}
+bptest(def3)
+dwtest(def3)
+```
+Eliminem els outliers
+
+```{r}
+library(car)
+summary(influence.measures(model = def3))
+
+```
+```{r}
+TRAN_VISIT_noin<- TRAN_VISIT2[-c(15,45,58,92,105,106,145,146,160,190,216,236,250,271,308,338,339,340,346,347,358,375,385,452,495,497,499,501,521,522,527,535),]
+```
+Tornem a fer la regressió lineal
+
+```{r}
+defnoin<-lm(COUNTtt ~ RECORDER + LC + YEAR + MONTH - 1, data = TRAN_VISIT_noin)
+summary(defnoin)
+```
+Tornem a comprovar les suposicions
+
+```{r}
+shapiro.test(defnoin$residuals)
+dwtest(defnoin)
+bptest(defnoin)
+```
+Encara hi ha heteroscedastictat i autocorrelació. Fem la transformació de Cochrane-Orcutt.
+
 ```{r}
 library(orcutt)
-model3<- cochrane.orcutt(model_no)
-model3
-summary(model3)
+coch<-cochrane.orcutt(defnoin)
+summary(coch)
 ```
-
 ```{r}
-dwtest(model3)
-shapiro.test(model3$residuals)
-bptest(model3)
+shapiro.test(coch$residuals)
+dwtest(coch)
+bptest(coch)
+library(car)
+qqPlot(coch$residuals, col.lines = "green")
 ```
+Es compleixen les suposicions del model.
 
 Com hem vist, quan hem aplicat el model lineal (model3), la variable explicativa "LC" tenia un efecte significatiu sobre la variable de resposta "COUNTt".
 Apliquem el test ANOVA per comparar la diferència de mitjanes: 
 
 ```{r}
-TRAN_VISIT_no$LC<- as.factor(TRAN_VISIT_no$LC)
-head(TRAN_VISIT_no$LC)
+TRAN_VISIT_noin$LC<- as.factor(TRAN_VISIT_noin$LC)
+head(TRAN_VISIT_noin$LC)
 library(ggplot2)
-ggplot(data = TRAN_VISIT_no, aes(x = LC, y = COUNTt, color = LC)) +
+ggplot(data = TRAN_VISIT_noin, aes(x = LC, y = COUNTtt, color = LC)) +
     geom_boxplot() +
     theme_bw()
 ```
 
 Apliquem el model lineal  
+
 ```{r}
-m2<- lm(COUNTt~LC, data = TRAN_VISIT_no)
+m2<- lm(COUNTtt~LC+0, data = TRAN_VISIT_noin)
 summary(m2)
 
 ```
 Test de normalitat dels residus a partir dels nivells de la variable LC: 
 ```{r}
 require(nortest)
-by(data = TRAN_VISIT_no,INDICES = TRAN_VISIT_no$LC,FUN = function(x){ lillie.test(x$COUNTt)})
+by(data = TRAN_VISIT_noin,INDICES = TRAN_VISIT_noin$LC,FUN = function(x){ lillie.test(x$COUNTtt)})
 ```
-
 ```{r}
-model<- aov(COUNTt ~ LC, data = TRAN_VISIT_no)
+model<- aov(COUNTtt ~ LC, data = TRAN_VISIT_noin)
 summary(model)
 ```
 
 Estimació de les mitjanes per grups LC:
 
 ```{r}
-attach(TRAN_VISIT_no)
-tapply(COUNTt,LC,mean,data=TRAN_VISIT_no)
+attach(TRAN_VISIT_noin)
+tapply(COUNTtt,LC,mean,data=TRAN_VISIT_noin)
 
 ```
 ```{r}
-pairwise.t.test(TRAN_VISIT_no$COUNTt,TRAN_VISIT_no$LC, p.adj= 'bonferroni')
+pairwise.t.test(TRAN_VISIT_noin$COUNTt,TRAN_VISIT_noin$LC, p.adj= 'bonferroni')
 ```
 
 ```{r}
-TRAN_COUNT6<- aggregate(COUNT ~ LC, TRAN_VISIT_no[TRAN_VISIT_no$YEAR %in% c(2013,2014,2015,2016),], sum)
+TRAN_COUNT6<- aggregate(COUNT ~ LC, TRAN_VISIT_noin[TRAN_VISIT_noin$YEAR %in% c(2013,2014,2015,2016),], sum)
 
 TRAN_COUNT6
 ```
 
 
-Fem l'anàlisi de correlacions:
+**Random forest regression**
 
 ```{r}
-library(corrplot)
-cor(TRAN_VISIT3)
-corrplot(cor(TRAN_VISIT3),
-         method = "circle",       
-         order = "hclust",        
-         hclust.method = "ward.D", 
-         addrect = 2,             
-         rect.col = 3,             
-         rect.lwd = 3)  
+library(randomForest)
+library(ggplot2)
 
+
+model.rf <- randomForest(COUNT~MONTH+YEAR+SUNSHINE+TEMPERATURE+WIND_SPEED+LC+NORTHING_10km+EASTING_10km+RECORDER+0,data = TRAN_VISIT2, mtry = 1,importance = TRUE, na.action = na.omit)
+
+print(model.rf)
+
+ImpData <- as.data.frame(importance(model.rf))
+ImpData$Var.Names <- row.names(ImpData)
+
+ggplot(ImpData, aes(x=Var.Names, y=`%IncMSE`)) +
+  geom_segment( aes(x=Var.Names, xend=Var.Names, y=0, yend=`%IncMSE`), color="skyblue") +
+  geom_point(aes(size = IncNodePurity), color="blue", alpha=0.6) +
+  theme_light() +
+  coord_flip() +
+  theme(
+    legend.position="bottom",
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank()
+  )
 ```
  
 ---------------------------------------------------------------------
+
 
 **PART 2: Classificació d'insectes pol·linitzadors**
 
@@ -493,14 +515,22 @@ corrplot(cor(TRAN_VISIT3),
 GMEP_POLLINATOR_OBSV_COUNT_2013_16 <- read.csv("~/MASTER/Assignatures/TFM/dades/data/GMEP_POLLINATOR_OBSV_COUNT_2013_16.csv")
 OBSV_COUNT = GMEP_POLLINATOR_OBSV_COUNT_2013_16
 OBSV_COUNT$SQ_ID <- as.factor(OBSV_COUNT$SQ_ID)
+OBSV_COUNT$VISITID <- as.factor(OBSV_COUNT$VISITID)
 OBSV_COUNT$MONTH <- as.factor(OBSV_COUNT$MONTH)
 OBSV_COUNT$YEAR <- as.factor(OBSV_COUNT$YEAR)
 OBSV_COUNT$FLOWER_GROUP_CODE<- as.factor(OBSV_COUNT$FLOWER_GROUP_CODE)
 OBSV_COUNT$INSECT_GROUP_CODE <- as.factor(OBSV_COUNT$INSECT_GROUP_CODE)
-OBSV_COUNT <- na.omit(OBSV_COUNT)
+
+OBSV_COUNT$INSECT_GROUP_CODE <- factor(OBSV_COUNT$INSECT_GROUP_CODE,
+                              levels = c("43", "44", "45", "46", "2001","2502","2505","3000", "3001", "3002", "3005","47","48","49","50","1005","1007","1011","1020","1021","1022","1023","1024","1500","1502","1504","1506","1512","1513","5050","1","2","3","6","7","8","9","10","16","19","20","21","23","24","25","26","27","28","31","34","35","36","37","38","39","40","41","42","102","106","107","108","111","113","115","118","120","123","125","126","127","128","130","132","134","136","137","139","140","145","146","148","152","157","162","164","170","178","180","182","185","186","187","188","189","194","195","197","198","199","201","202","205","206","208","209","210","214","218","224","240","241","242","243","244","245","247", "1006"),
+                              labels = c("Himenòpter","Himenòpter","Himenòpter","Himenòpter","Himenòpter","Himenòpter","Himenòpter","Odonat","Odonat","Odonat","Odonat","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Dípter","Hemípter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter","Lepidòpter"))
+
+OBSV_COUNT<- na.omit(OBSV_COUNT)
 attach(OBSV_COUNT)
 head(OBSV_COUNT)
+
 ```
+
 ```{r}
 hist(OBSV_COUNT$NUM_VISITS, xlim = c(0, 250))
 ```
@@ -562,7 +592,6 @@ OBSV_COUNT4<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$Y
 OBSV_COUNT4
 
 ```
-
 ANÀLISIS DE CONGLOMERATS
 
 ```{r}
