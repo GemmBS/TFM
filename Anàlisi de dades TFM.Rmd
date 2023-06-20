@@ -550,6 +550,8 @@ Veiem que els outliers respecte la mediana van des del 5 al 282.
 dcaixa<- boxplot(formula = NUM_VISITS ~ YEAR, data =  OBSV_COUNT)
 ```
 
+COMPTABILITZACIÓ D'INSECTES POL·LINITZADORS
+
 ```{r}
 tapply(OBSV_COUNT$NUM_VISITS,OBSV_COUNT$YEAR,mean,data=OBSV_COUNT)
 tapply(OBSV_COUNT$NUM_VISITS,OBSV_COUNT$YEAR,median,data=TRAN_COUNT)
@@ -592,6 +594,22 @@ OBSV_COUNT4<- aggregate( NUM_VISITS ~ INSECT_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$Y
 OBSV_COUNT4
 
 ```
+COMPTABILITZACIÓ DE PLANTES POL·LINITZADORES
+
+```{r}
+OBSV_COUNT$FLOWER_GROUP_CODE <- factor(OBSV_COUNT$FLOWER_GROUP_CODE,
+                              levels = c("51","52","53","54","55","56","57","58","59","60","61","62","63","64","65","4001","4002","4501","4502","4503","4504"),
+                              labels = c("Apiaceae (umbelíferae)","Asteraceae (purple composites)","Asteraceae (yellow composites)","Dipsacaceae (teasels, scabious)","Ericaceae (heathers)","Fabaceae (legumes)","Lamiaceae (labiates)","Onagraceae (willowherbs)","Orobanchaceae (red bartsia)","Ranunculaceae (buttercups)","Rosaceae (bramble, meadowsweet)","Scrophulariaceae (figworts, mulleins)","Other","Other plants","Not at Flower","Filipendula ulmaria","Odontites vernus","Angelica sp","Fumitory species","Ranunculus,Buttercup species","Senecio,Ragwort species"))
+
+OBSV_COUNT$FLOWER_GROUP_CODE
+```
+
+```{r}
+OBSV_COUNT8<- aggregate( NUM_VISITS ~ FLOWER_GROUP_CODE, OBSV_COUNT[OBSV_COUNT$YEAR %in% c(2013,2014,2015,2016),], sum)
+
+OBSV_COUNT8
+```
+
 ANÀLISIS DE CONGLOMERATS
 
 ```{r}
